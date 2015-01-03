@@ -305,9 +305,12 @@ function importPNX(text) {
 	}
 	
 	var publisher = ZU.xpathText(doc, '//display/publisher');
+	// Attention to name prefixes after colons, e.g. "Meurs, Jacob : van "
 	// BEIC.it uses //display/lds09, //search/lsr12, //search/lsr03, //facets/lfc03
-	// for place, unclear what those are
-	if(publisher) var pubplace = ZU.unescapeHTML(publisher).split(" : ");
+	// for place, unclear how standard those are
+	if(publisher && !publisher.match(/ : [a-z]/) ) {
+		var pubplace = ZU.unescapeHTML(publisher).split(" : ");
+	}
 	if(pubplace && pubplace[1]) {
 		item.place = pubplace[0].replace(/,\s*c?\d+|[\(\)\[\]]|(\.\s*)?/g, "");
 		item.publisher = pubplace[1].replace(/,\s*c?\d+|[\(\)\[\]]|(\.\s*)?/g, "")
