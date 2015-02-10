@@ -433,15 +433,21 @@ function extractNumPages(str) {
 	// f., p., pp. and S. are "pages" in various languages
 	// For multi-volume works, we expect formats like:
 	//   x-109 p., 510 p. and X, 106 S.; 123 S.
+	// For volumes with multiple paginations and other info, formats like:
+	// - [16], 228, [4] p. : ill. ; 4°
 
-	var numPagesRE = /\[?\b((?:[ivxlcdm\d]+[ ,\-]*)+)\]?\s+[fps]+\b/ig,
+	var numPagesRE = /\b((?:\[?[ivxlcdm\d]+\]?[ ,\-]*)+)\s+[fps]+\b/ig,
 		numPages = [], m;
 	while(m = numPagesRE.exec(str)) {
 		numPages.push(m[1].trim()
-			.replace(/[ ,\-]+/g,'+')
+			// Separate different paginations with a "+"
+			.replace(/[ ,\-\[\]]+(?!$)/g, '+')
+			// We may have some trailing punctuation
+			.replace(/[,\-\[\]]+$/g, '')
 			.toLowerCase() // for Roman numerals
 		);
 	}
+	// Separate volumes with a ";"
 	return numPages.join('; ');
 }/** BEGIN TEST CASES **/
 var testCases = [
@@ -597,7 +603,8 @@ var testCases = [
 				"date": "1645",
 				"language": "lat",
 				"libraryCatalog": "Primo",
-				"publisher": "Benacci, Vittorio, eredi",
+				"publisher": "Vittorio Benacci (eredi)",
+				"numPages": "16+228+4",
 				"attachments": [],
 				"tags": [
 					"Stelle fisse - Novae"
