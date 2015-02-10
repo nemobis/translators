@@ -389,7 +389,7 @@ function importPNX(text) {
 	
 	item.edition = ZU.xpathText(doc, '//display/edition');
 	
-	var subjects = ZU.xpath(doc, '//display/display|//search/subject');
+	var subjects = ZU.xpath(doc, '//display/subject|//search/subject');
 	for(var i=0, n=subjects.length; i<n; i++) {
 		item.tags.push(ZU.trimInternal(subjects[i].textContent));
 	}
