@@ -261,17 +261,10 @@ function importPNX(text) {
 	item.title = ZU.xpathText(doc, '//display/title');
 	if(item.title) item.title = ZU.unescapeHTML(item.title);
 	
-	var creators;
-	var contributors;
-	if(ZU.xpathText(doc, '//display/creator')) {
-		creators = ZU.xpath(doc, '//display/creator'); 
-	}
-	
-	if(ZU.xpathText(doc, '//display/contributor')) {
-		contributors = ZU.xpath(doc, '//display/contributor'); 
-	}
-
-	if(!creators && contributors) { // <creator> not available using <contributor> as author instead
+	var creators = ZU.xpath(doc, '//display/creator');
+	var contributors = ZU.xpath(doc, '//display/contributor');
+	if(!creators.length && contributors.length) {
+		// <creator> not available using <contributor> as author instead
 		creators = contributors;
 		contributors = [];
 	}
@@ -400,10 +393,10 @@ function stripAuthor(str) {
 		// Remove year
 		.replace(/\s*,?\s*\(?\d{4}-?(\d{4})?\)?/g, '')
 		// Remove things like (illustrator). TODO: use this to assign creator type?
-		.replace(/\s*,?\s*\([^()]*\)$/, '');
+		.replace(/\s*,?\s*\([^()]*\)$/, '')
 		// Remove almost any remaining parenthesis, starting with letters used
 		// for common international abbreviations about dates
-		.replace(/\([\d\sabcefilr.? ]*[-–][\d\abcefilr.? ]*\)/gi, '');
+		.replace(/\([\d\sabcefilr.? ]*[-–][\d\abcefilr.? ]*\)/gi, '')
 		// The full "continuous" name uses no separators, which need be removed
 		// cf. "Luc, Jean André : de (1727-1817)"
 		.replace(/ :/, "");
