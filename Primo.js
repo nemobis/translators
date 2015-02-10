@@ -1,7 +1,7 @@
 {
 	"translatorID": "1300cd65-d23a-4bbf-93e5-a3c9e00d1066",
 	"label": "Primo",
-	"creator": "Matt Burton, Avram Lyon, Etienne Cavalié, Rintze Zelle, Philipp Zumstein, Sebastian Karcher, Aurimas Vinckevicius",
+	"creator": "Matt Burton, Avram Lyon, Etienne Cavalié, Rintze Zelle, Philipp Zumstein, Sebastian Karcher, Aurimas Vinckevicius, Fondazione BEIC",
 	"target": "/primo_library/|/nebis/|^https?://www\\.recherche-portal\\.ch/zbz/",
 	"minVersion": "2.1.9",
 	"maxVersion": "",
@@ -297,20 +297,20 @@ function importPNX(text) {
 			}			
 		}
 	}
-	//PNX doesn't do well with institutional authors; This isn't perfect, but it helps:
+
 	for(i in item.creators){
-		if(!item.creators[i].firstName){
+		// PNX doesn't do well with institutional authors; This isn't perfect, but it helps:
+		if(!item.creators[i].firstName) {
 			item.creators[i].fieldMode=1;
+		} else {
+		// The full "continuous" name uses no separators, which need be removed
+		// cf. "Luc, Jean André : de (1727-1817)"
+		item.creators[i].firstName.replace(/ :/, "");
 		}
 	}
 	
 	var publisher = ZU.xpathText(doc, '//display/publisher');
-	// Attention to name prefixes after colons, e.g. "Meurs, Jacob : van "
-	// BEIC.it uses //display/lds09, //search/lsr12, //search/lsr03, //facets/lfc03
-	// for place, unclear how standard those are
-	if(publisher && !publisher.match(/ : [a-z]/) ) {
-		var pubplace = ZU.unescapeHTML(publisher).split(" : ");
-	}
+	if(publisher) var pubplace = ZU.unescapeHTML(publisher).split(" : ");
 	if(pubplace && pubplace[1]) {
 		item.place = pubplace[0].replace(/,\s*c?\d+|[\(\)\[\]]|(\.\s*)?/g, "");
 		item.publisher = pubplace[1].replace(/,\s*c?\d+|[\(\)\[\]]|(\.\s*)?/g, "")
@@ -325,9 +325,26 @@ function importPNX(text) {
 	if(date && (m = date.match(/\d+/))) {
 		item.date = m[0];
 	}
+
+	// Old publishers may be written as "Last, First" etc. according to
+	// standards, but should be like authors when in citations.
+	// Source: librarian https://it.wikipedia.org/?diff=69781295
+	// "Dozza, Evangelista (1.), eredi"
+	// "Marnef, Jérôme de & Cavellat, Guillaume, veuve"
+	if(item.publisher && item.date && item.date < '1831') {
+		// Remove excess space and secondary disambiguations
+		var declutter = item.publisher.replace(/ *\& */g, "; ").replace(/ *\([^)]+\)/g, "");
+		// Shuffle names with disambiguation and remove numbering
+		var shuffle3 = declutter.replace(/ *([^,;]+), +([^,;0-9]+) *[0-9]*, +([^,;]+) */g, "$2 $1 ($3)");
+		// Same, other names
+		var shuffle2 = shuffle3.replace(/ *([^,;]+), +([^,;0-9]+) *[0-9]* */g, "$2 $1");
+		// Use comma list, get rid of space buildup for numbered names
+		item.publisher = shuffle2.replace(/ *[;] */g, ", ").replace(/  /g, " ");
+	}
 	
-	// the three letter ISO codes that should be in the language field work well:
-	item.language = ZU.xpathText(doc, '//display/language|//facets/language');
+	// The three letter codes, that should be in the language field, usually work well
+	// (although they may be in MARC21, or ISO 639-2, rather than ISO 639-3 or others)
+	item.language = ZU.xpathText(doc, '//display/language');
 	
 	// BEIC.it uses //dedup/f9, unclear what that is
 	var pages = ZU.xpathText(doc, '//display/format');
