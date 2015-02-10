@@ -25,6 +25,8 @@ Primos with showPNX.jsp installed:
 (3) http://limo.libis.be/primo_library/libweb/action/search.do?vid=LIBISnet&fromLogin=true
 (4.a) http://virtuose.uqam.ca/primo_library/libweb/action/search.do?vid=UQAM
 (5) http://searchit.princeton.edu/primo_library/libweb/action/dlDisplay.do?docId=PRN_VOYAGER2778598&vid=PRINCETON&institution=PRN
+
+Other Primos where showPnx=true is available:
 (6) http://digitale.beic.it/primo_library/libweb/action/search.do?vid=beic
 */
 
@@ -280,7 +282,9 @@ function importPNX(text) {
 	for(i in creators) {
 		if(creators[i]) {
 			var creator  = ZU.unescapeHTML(creators[i].textContent).split(/\s*;\s*/);
-			for(j in creator){
+			for(j in creator) {
+				// Remove almost every parenthesis, starting with letters used
+				// for common international abbreviations
 				creator[j] = creator[j].replace(/\([\d\sabcefilr.? ]*[-–][\d\abcefilr.? ]*\)/gi, '');
 				creator[j] = creator[j].replace(/\d{4}-(\d{4})?/g, '');
 				item.creators.push(Zotero.Utilities.cleanAuthor(creator[j], "author", true));
@@ -328,12 +332,24 @@ function importPNX(text) {
 
 	// Old publishers may be written as "Last, First" etc. according to
 	// standards, but should be like authors when in citations.
-	// Source: librarian https://it.wikipedia.org/?diff=69781295
+	// Source: Italian librarian https://it.wikipedia.org/?diff=69781295
 	// "Dozza, Evangelista (1.), eredi"
 	// "Marnef, Jérôme de & Cavellat, Guillaume, veuve"
-	if(item.publisher && item.date && item.date < '1831') {
+	// But:
+	// "The Minerals, Metals & Materials Society"
+	// "Hodges, Foster & Co."
+	// Also ignore annotations which are not proper names, like:
+	// "printed by Henry Hills, printer to the King's most Excellent Majesty, for His Household and Chappel"
+	// Still to handle:
+	// "Hessisches Ministerium für Landwirtschaft, Forsten und Naturschutz, Landentwicklung"
+	if( item.publisher
+		&& item.date
+		&& item.date < '1831'
+		&& item.publisher[0].toUpperCase() == item.publisher[0]
+	) {
 		// Remove excess space and secondary disambiguations
-		var declutter = item.publisher.replace(/ *\& */g, "; ").replace(/ *\([^)]+\)/g, "");
+		// Do not replace "&" unless there is a second name-looking string
+		var declutter = ZU.trimInternal(item.publisher).replace(/ \& ([^&,;]+,)/g, "; $1").replace(/ *\([^)]+\)/g, "");
 		// Shuffle names with disambiguation and remove numbering
 		var shuffle3 = declutter.replace(/ *([^,;]+), +([^,;0-9]+) *[0-9]*, +([^,;]+) */g, "$2 $1 ($3)");
 		// Same, other names
