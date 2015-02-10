@@ -355,7 +355,10 @@ function importPNX(text) {
 	
 	item.edition = ZU.xpathText(doc, '//display/edition');
 	
-	var subjects = ZU.xpath(doc, '//display/subject|//search/subject');
+	var subjects = ZU.xpath(doc, '//search/subject');
+	if(!subjects.length) {
+		subjects = ZU.xpath(doc, '//display/subject');
+	}
 	for(var i=0, n=subjects.length; i<n; i++) {
 		item.tags.push(ZU.trimInternal(subjects[i].textContent));
 	}
