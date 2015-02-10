@@ -6,13 +6,10 @@
 	"minVersion": "2.1.9",
 	"maxVersion": "",
 	"priority": 100,
-	"configOptions": {
-		"dataMode": "block"
-	},
 	"inRepository": true,
 	"translatorType": 13,
-	"browserSupport": "gcsbv",
-	"lastUpdated": "2014-06-20 04:23:04"
+	"browserSupport": "gcsibv",
+	"lastUpdated": "2015-01-09 16:06:12"
 }
 
 /*****************************

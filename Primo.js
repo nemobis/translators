@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsb",
-	"lastUpdated": "2014-12-31 18:43:27"
+	"lastUpdated": "2015-01-02 04:40:01"
 }
 
 /*
@@ -226,6 +226,7 @@ function importPNX(text) {
 	
 	switch(itemType.toLowerCase()) {
 		case 'book':
+		case 'ebook':
 		case 'books':
 			item.itemType = "book";
 		break;
@@ -272,47 +273,27 @@ function importPNX(text) {
 
 	if(!creators && contributors) { // <creator> not available using <contributor> as author instead
 		creators = contributors;
-		contributors = null;
-	}
-	
-	if(!creators && ! contributors){
-		creators = ZU.xpath(doc, '//addata/addau')
-	}
-	
-	for(i in creators) {
-		if(creators[i]) {
-			var creator  = ZU.unescapeHTML(creators[i].textContent).split(/\s*;\s*/);
-			for(j in creator) {
-				// Remove almost every parenthesis, starting with letters used
-				// for common international abbreviations
-				creator[j] = creator[j].replace(/\([\d\sabcefilr.? ]*[-–][\d\abcefilr.? ]*\)/gi, '');
-				creator[j] = creator[j].replace(/\d{4}-(\d{4})?/g, '');
-				item.creators.push(Zotero.Utilities.cleanAuthor(creator[j], "author", true));
-			}			
-		}
-	}
-	
-	for(i in contributors) {
-		if(contributors[i]) {
-			var contributor = ZU.unescapeHTML(contributors[i].textContent).split(/\s*;\s*/);
-			for(j in contributor){
-			contributor[j] = contributor[j].replace(/\d{4}-(\d{4})?/g, '');
-			item.creators.push(Zotero.Utilities.cleanAuthor(contributor[j], "contributor", true));
-			}			
-		}
+		contributors = [];
 	}
 
-	for(i in item.creators){
-		// PNX doesn't do well with institutional authors; This isn't perfect, but it helps:
-		if(!item.creators[i].firstName) {
-			item.creators[i].fieldMode=1;
-		} else {
-		// The full "continuous" name uses no separators, which need be removed
-		// cf. "Luc, Jean André : de (1727-1817)"
-		item.creators[i].firstName.replace(/ :/, "");
+	// //addata/au is great because it lists authors in last, first format,
+	// but it can also have a bunch of junk. We'll use it to help split authors
+	var splitGuidance = {};
+	var addau = ZU.xpath(doc, '//addata/addau|//addata/au');
+	for (var i=0; i<addau.length; i++) {
+		var author = stripAuthor(addau[i].textContent);
+		if (author.indexOf(',') != -1) {
+			var splitAu = author.split(',');
+			if (splitAu.length > 2) continue;
+			var name = splitAu[1].trim().toLowerCase() + ' '
+				+ splitAu[0].trim().toLowerCase()
+			splitGuidance[name] = author;
 		}
 	}
 	
+	fetchCreators(item, creators, 'author', splitGuidance);
+	fetchCreators(item, contributors, 'contributor', splitGuidance);
+
 	var publisher = ZU.xpathText(doc, '//display/publisher');
 	if(publisher) var pubplace = ZU.unescapeHTML(publisher).split(" : ");
 	if(pubplace && pubplace[1]) {
@@ -357,26 +338,18 @@ function importPNX(text) {
 		// Use comma list, get rid of space buildup for numbered names
 		item.publisher = shuffle2.replace(/ *[;] */g, ", ").replace(/  /g, " ");
 	}
-	
+
 	// The three letter codes, that should be in the language field, usually work well
 	// (although they may be in MARC21, or ISO 639-2, rather than ISO 639-3 or others)
-	item.language = ZU.xpathText(doc, '//display/language');
-	
+	item.language = ZU.xpathText(doc, '(//display/language|//facets/language)[1]');
+
 	// BEIC.it uses //dedup/f9, unclear what that is
 	var pages = ZU.xpathText(doc, '//display/format');
-	if(pages && pages.search(/[0-9]+/) != -1) {
-		pages = pages.replace(/[\(\)\[\]]/g, "");
-		// And then we'd hope pages are the only number mentioned in the format
-		// Except that they aren't, in BEIC.it, so we focus the match a bit
-		if(pages.search(/ p+[. ]/) != -1) {
-			var dirt = pages;
-			pages = null;
-			pages = dirt.match(/(?:p+[. ]*)([0-9]+) *(?:p+[. ]*)/);
-		} else {
-			pages = pages.match(/[0-9]+/)[0];
-		}
-		item.pages = item.numPages = pages;
+	if(item.itemType == 'book' && pages && pages.search(/\d/) != -1) {
+		item.numPages = extractNumPages(pages);
 	}
+
+	item.series = ZU.xpathText(doc, '(//addata/seriestitle)[1]');
 
 	// The identifier field is supposed to have standardized format, but
 	// the super-tolerant idCheck should be better than a regex.
@@ -394,8 +367,9 @@ function importPNX(text) {
 		item.tags.push(ZU.trimInternal(subjects[i].textContent));
 	}
 	
-	item.abstractNote = ZU.xpathText(doc, '//addata/abstract')
-		|| ZU.xpathText(doc, '//display/description');
+	item.abstractNote = ZU.xpathText(doc, '//display/description')
+		|| ZU.xpathText(doc, '//addata/abstract');
+	if (item.abstractNote) item.abstractNote = ZU.unescapeHTML(item.abstractNote);
 	
 	item.DOI = ZU.xpathText(doc, '//addata/doi');
 	item.issue = ZU.xpathText(doc, '//addata/issue');
@@ -419,37 +393,194 @@ function importPNX(text) {
 	item.callNumber = ZU.xpathText(doc, '//enrichment/classificationlcc');
 	
 	item.complete();
+}
+
+function stripAuthor(str) {
+	return str
+		// Remove year
+		.replace(/\s*,?\s*\(?\d{4}-?(\d{4})?\)?/g, '')
+		// Remove things like (illustrator). TODO: use this to assign creator type?
+		.replace(/\s*,?\s*\([^()]*\)$/, '');
+		// Remove almost any remaining parenthesis, starting with letters used
+		// for common international abbreviations about dates
+		.replace(/\([\d\sabcefilr.? ]*[-–][\d\abcefilr.? ]*\)/gi, '');
+		// The full "continuous" name uses no separators, which need be removed
+		// cf. "Luc, Jean André : de (1727-1817)"
+		.replace(/ :/, "");
+}
+
+function fetchCreators(item, creators, type, splitGuidance) {
+	for(var i=0; i<creators.length; i++) {
+		var creator = ZU.unescapeHTML(creators[i].textContent).split(/\s*;\s*/);
+		for(var j=0; j<creator.length; j++) {
+			var c = stripAuthor(creator[j]);
+			c = ZU.cleanAuthor(
+				splitGuidance[c.toLowerCase()] || c,
+				type,
+				true
+			);
+			
+			if (!c.firstName) {
+				delete c.firstName;
+				c.fieldMode = 1;
+			}
+			
+			item.creators.push(c);
+		}
+	}
+}
+
+function extractNumPages(str) {
+	// Borrowed from Library Catalog (PICA). See #756.
+	// Make sure things like "2 partition" don't match,
+	// but "2 p" at the end of the field does.
+	// f., p., pp. and S. are "pages" in various languages
+	// For multi-volume works, we expect formats like:
+	//   x-109 p., 510 p. and X, 106 S.; 123 S.
+
+	var numPagesRE = /\[?\b((?:[ivxlcdm\d]+[ ,\-]*)+)\]?\s+[fps]+\b/ig,
+		numPages = [], m;
+	while(m = numPagesRE.exec(str)) {
+		numPages.push(m[1].trim()
+			.replace(/[ ,\-]+/g,'+')
+			.toLowerCase() // for Roman numerals
+		);
+	}
+	return numPages.join('; ');
 }/** BEGIN TEST CASES **/
 var testCases = [
 	{
 		"type": "web",
-		"defer": true,
-		"url": "http://solo.bodleian.ox.ac.uk/primo_library/libweb/action/dlDisplay.do?docId=oxfaleph010311597&vid=OXVU1",
+		"url": "http://searchit.princeton.edu/primo_library/libweb/action/dlDisplay.do?docId=PRN_VOYAGER2778598&vid=PRINCETON&institution=PRN&showPNX=true",
 		"items": [
 			{
 				"itemType": "book",
+				"title": "China and foreign missionaries.",
 				"creators": [
 					{
-						"firstName": "Jürgen",
-						"lastName": "Pütz",
+						"lastName": "Great Britain. Foreign Office",
+						"creatorType": "author",
+						"fieldMode": 1
+					}
+				],
+				"date": "1860",
+				"language": "eng",
+				"libraryCatalog": "Primo",
+				"publisher": "London",
+				"attachments": [],
+				"tags": [
+					"China Foreign relations Great Britain.",
+					"China Religion.",
+					"Great Britain Foreign relations China.",
+					"Missions China."
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://purdue-primo-prod.hosted.exlibrisgroup.com/primo_library/libweb/action/dlDisplay.do?vid=PURDUE&docId=PURDUE_ALMA21505315560001081&fn=permalink",
+		"items": [
+			{
+				"itemType": "book",
+				"title": "War",
+				"creators": [
+					{
+						"firstName": "Lawrence",
+						"lastName": "Freedman",
 						"creatorType": "author"
 					}
 				],
-				"notes": [],
-				"tags": [
-					"Thelen, Albert Vigoleis, 1903-1989 Y"
-				],
-				"seeAlso": [],
-				"attachments": [],
-				"title": "In Zweifelsfällen entscheidet die Wahrheit : Beiträge zu Albert Vigoleis Thelen",
-				"place": "Viersen",
-				"publisher": "JUNI",
-				"date": "1988",
-				"language": "ger",
-				"numPages": "149",
-				"ISBN": "3926738014",
+				"date": "1994",
+				"ISBN": "0192892541",
+				"abstractNote": "Experience of war -- Causes of war -- War and the military establishment -- Ethics of war -- Strategy -- Total war and the great powers -- Limited war and developing countries., \"War makes headlines and history books. It has shaped the international system, prompted social change, and inspired literature, art, and music. It engenders some of the most intense as well as the most brutal human experiences, and it raises fundamental questions of human ethics.\" \"The ubiquitous, contradictory, and many-sided character of war is fully reflected in this reader. It addresses a wide range of questions: What are the causes of war? Which strategic as well as moral principles guide its conduct, and how have these changed? Has total war become unthinkable? What is the nature of contemporary conflict? How is war experienced by those on the front line?\" \"These and other key issues are examined through a variety of writings. Drawing on sources from numerous countries and disciplines, this reader includes accounts by generals, soldiers, historians, strategists, and poets, who consider conflicts from the Napoleonic Wars to Vietnam and Bosnia. The writing not only of great strategic thinkers but also of ordinary soldiers illustrates both the theory and the experience of war in its many guises.\"--BOOK JACKET.",
+				"callNumber": "U21.2",
+				"language": "eng",
 				"libraryCatalog": "Primo",
-				"shortTitle": "In Zweifelsfällen entscheidet die Wahrheit"
+				"numPages": "xi+385",
+				"place": "Oxford ; New York",
+				"publisher": "Oxford University Press",
+				"series": "Oxford readers",
+				"attachments": [],
+				"tags": [
+					"War."
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://limo.libis.be/primo_library/libweb/action/dlDisplay.do?vid=LIBISnet&docId=32LIBIS_ALMA_DS71166851730001471&fn=permalink",
+		"items": [
+			{
+				"itemType": "book",
+				"title": "War",
+				"creators": [
+					{
+						"firstName": "Albert R.",
+						"lastName": "Leventhal",
+						"creatorType": "author"
+					},
+					{
+						"firstName": "Del",
+						"lastName": "Byrne",
+						"creatorType": "contributor"
+					}
+				],
+				"date": "1973",
+				"ISBN": "0600393046",
+				"language": "eng",
+				"libraryCatalog": "Primo",
+				"numPages": "252",
+				"publisher": "Hamlyn",
+				"attachments": [],
+				"tags": [],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
+	{
+		"type": "web",
+		"url": "http://virtuose.uqam.ca/primo_library/libweb/action/dlDisplay.do?vid=UQAM&docId=UQAM_BIB000969205&fn=permalink",
+		"items": [
+			{
+				"itemType": "book",
+				"title": "War",
+				"creators": [
+					{
+						"firstName": "Ken",
+						"lastName": "Baynes",
+						"creatorType": "author"
+					},
+					{
+						"lastName": "Welsh Arts Council",
+						"creatorType": "contributor",
+						"fieldMode": 1
+					},
+					{
+						"lastName": "Glynn Vivian Art Gallery",
+						"creatorType": "contributor",
+						"fieldMode": 1
+					}
+				],
+				"date": "1970",
+				"language": "eng",
+				"libraryCatalog": "Primo",
+				"publisher": "Boston Boston Book and Art Chop",
+				"series": "Art and society 1",
+				"attachments": [],
+				"tags": [
+					"ART",
+					"GUERRE",
+					"WAR"
+				],
+				"notes": [],
+				"seeAlso": []
 			}
 		]
 	},
