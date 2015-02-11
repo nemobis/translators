@@ -287,17 +287,44 @@ function importPNX(text) {
 	fetchCreators(item, creators, 'author', splitGuidance);
 	fetchCreators(item, contributors, 'contributor', splitGuidance);
 
+	// For this section, contrastive examples:
+	// http://primo.bib.uni-mannheim.de/primo_library/libweb/action/display.do?doc=MAN_ALEPH000967205&showPnx=true
+	// http://digitale.beic.it/primo_library/libweb/action/display.do?doc=39bei_digitool2018516&showPnx=true
+	// http://digitale.beic.it/primo_library/libweb/action/display.do?doc=39bei_digitool2394625&showPnx=true
+	// Example: "Milano". Rarely: "Mediolani", "In Milano" etc.
+	// BEIC.it also uses //display/lds09, //search/lsr12, //search/lsr03, //facets/lfc03
+	item.place = ZU.xpathText(doc, '//addata/cop');
+	
+	// E.g. "Parma : Viotto", "Ambrogio : da Caponago", "Mantegazza, Filippo"
 	var publisher = ZU.xpathText(doc, '//display/publisher');
-	if(publisher) var pubplace = ZU.unescapeHTML(publisher).split(" : ");
-	if(pubplace && pubplace[1]) {
-		item.place = pubplace[0].replace(/,\s*c?\d+|[\(\)\[\]]|(\.\s*)?/g, "");
+	// E.g. "Viotto", "[Ambrogio da Caponago]", "per magistro Philippo dicto Cassano di Mantegatii"
+	if(!publisher) var publisher = ZU.xpathText(doc, '//addata/pub');
+	if(publisher) {
+		var pubplace = ZU.unescapeHTML(publisher).split(" : ");
+		var possibleplace = pubplace[0].replace(/,\s*c?\d+|[\(\)\[\]]|(\.\s*)?/g, "");
+	}
+	if(pubplace && pubplace[1] && item.place && item.place !== possibleplace) {
+		// The splitting produced something, but the first segment is not the place.
+		// Probably, the whole string was the publisher's name.
+		// Should also catch cases like "Meurs, Jacob : van "
+		item.publisher = publisher;
+	} else if(pubplace && pubplace[1]) {
+		// Hopefully we split in place, publisher name.
 		item.publisher = pubplace[1].replace(/,\s*c?\d+|[\(\)\[\]]|(\.\s*)?/g, "")
 			.replace(/^\s*"|,?"\s*$/g, '');
 	} else if(pubplace) {
-		item.publisher = pubplace[0].replace(/,\s*c?\d+|[\(\)\[\]]|(\.\s*)?/g, "")
-			.replace(/^\s*"|,?"\s*$/g, '');
+		// No splitting, use the whole (cleaned) string
+		item.publisher = possibleplace.replace(/^\s*"|,?"\s*$/g, '');
 	}
-	
+	if(!item.place && possibleplace && pubplace[1]) {
+		// Splitting happened and we need a place, we hope this is it
+		item.place = possibleplace;
+	}
+
+	// //addata/date is sometimes available: ever needed?
+	// //addata/risdate can contain the date as written on the manifestation and
+	// be the only date, e.g. "Anno domini MCCCCLXXXXV die XXVII februarii" in
+	// http://digitale.beic.it/primo_library/libweb/action/display.do?doc=39bei_digitool2394625&showPnx=true
 	var date = ZU.xpathText(doc, '//display/creationdate|//search/creationdate');
 	var m;
 	if(date && (m = date.match(/\d+/))) {
@@ -328,8 +355,8 @@ function importPNX(text) {
 		var shuffle3 = declutter.replace(/ *([^,;]+), +([^,;0-9]+) *[0-9]*, +([^,;]+) */g, "$2 $1 ($3)");
 		// Same, other names
 		var shuffle2 = shuffle3.replace(/ *([^,;]+), +([^,;0-9]+) *[0-9]* */g, "$2 $1");
-		// Use comma list, get rid of space buildup for numbered names
-		item.publisher = shuffle2.replace(/ *[;] */g, ", ").replace(/  /g, " ");
+		// Use comma list, get rid of space buildup for numbered names, clean like authors
+		item.publisher = stripAuthor( shuffle2.replace(/ *[;] */g, ", ").replace(/  /g, " ") );
 	}
 
 	// The three letter codes, that should be in the language field, usually work well
