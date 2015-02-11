@@ -392,13 +392,14 @@ function importPNX(text) {
 }
 
 function stripAuthor(str) {
+	// Example "Andrea : da Barberino (1370-circa 1431)"
+	// http://gutenberg.beic.it/webclient/MetadataManager?pid=3836862&descriptive_only=true
 	return str
-		// Remove year
-		.replace(/\s*,?\s*\(?\d{4}-?(\d{4})?\)?/g, '')
 		// Remove things like (illustrator). TODO: use this to assign creator type?
+		// Also matches an empty parenthesis
 		.replace(/\s*,?\s*\([^()]*\)$/, '')
-		// Remove almost any remaining parenthesis, starting with letters used
-		// for common international abbreviations about dates
+		// Remove almost any remaining parenthesis, starting with numbers (dates) and
+		// letters used for common international abbreviations about dates
 		.replace(/\([\d\sabcefilr.? ]*[-–][\d\abcefilr.? ]*\)/gi, '')
 		// The full "continuous" name uses no separators, which need be removed
 		// cf. "Luc, Jean André : de (1727-1817)"
@@ -436,6 +437,7 @@ function extractNumPages(str) {
 	// For volumes with multiple paginations and other info, formats like:
 	// - [16], 228, [4] p. : ill. ; 4°
 
+	// Brackets are an (optional) "property" of each pagination
 	var numPagesRE = /\b((?:\[?[ivxlcdm\d]+\]?[ ,\-]*)+)\s+[fps]+\b/ig,
 		numPages = [], m;
 	while(m = numPagesRE.exec(str)) {
