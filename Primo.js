@@ -9,7 +9,7 @@
 	"inRepository": true,
 	"translatorType": 4,
 	"browserSupport": "gcsb",
-	"lastUpdated": "2015-01-02 04:40:01"
+	"lastUpdated": "2015-02-11 13:32:01"
 }
 
 /*
@@ -632,8 +632,8 @@ var testCases = [
 				"date": "1645",
 				"language": "lat",
 				"libraryCatalog": "Primo",
-				"publisher": "Vittorio Benacci (eredi)",
 				"numPages": "16+228+4",
+				"publisher": "Vittorio Benacci",
 				"attachments": [],
 				"tags": [
 					"Stelle fisse - Novae"
@@ -642,6 +642,35 @@ var testCases = [
 				"seeAlso": []
 			}
 		]
-	}
+	},
+	{
+		"type": "web",
+		"url": "http://digitale.beic.it/primo_library/libweb/action/display.do?doc=39bei_digitool2018516",
+		"items": [
+			{
+				"itemType": "book",
+				"title": "Grida per i Milanesi che avevano seguito Ludovico il Moro",
+				"creators": [
+					{
+						"lastName": "Milano",
+						"creatorType": "author",
+						"fieldMode": 1
+					}
+				],
+				"date": "1500",
+				"language": "ita",
+				"libraryCatalog": "Primo",
+				"place": "Milano",
+				"publisher": "Ambrogio da Caponago",
+				"attachments": [],
+				"tags": [
+					"Italia - Storia medioevale",
+					"Leggi"
+				],
+				"notes": [],
+				"seeAlso": []
+			}
+		]
+	},
 ]
 /** END TEST CASES **/
